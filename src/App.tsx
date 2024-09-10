@@ -6,6 +6,7 @@ import Header from './components/Header';
 import ExpenseForm from './components/ExpenseForm';
 import Dashboard from './components/Dashboard';
 import ExpensesTable from './components/ExpensesTable';
+import ShoppingLists from './components/ShoppingLists';
 
 const theme = createTheme({
   direction: 'rtl',
@@ -65,6 +66,7 @@ function App() {
           <Route exact path="/" component={Dashboard} />
           <Route path="/add-expense" component={ExpenseForm} />
           <Route path="/expenses" component={ExpensesTable} />
+          <Route path="/shopping-lists" component={ShoppingLists} />
           <Redirect from="*" to="/" />
         </Switch>
       </Router>

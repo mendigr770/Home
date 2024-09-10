@@ -1,13 +1,11 @@
-import React, { useState, useEffect, KeyboardEvent } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Typography, TextField, Button, List, ListItem, ListItemText, Select, MenuItem, FormControl, InputLabel, Paper, IconButton, Fab, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import { fetchShoppingLists, fetchShoppingListItems, addShoppingListItem, updateShoppingListItemStatus, ShoppingListItem, deleteShoppingListItem, updateShoppingListItem } from '../services/googleSheetsService';
+import { fetchShoppingLists, fetchShoppingListItems, addShoppingListItem, updateShoppingListItem, ShoppingListItem, deleteShoppingListItem } from '../services/googleSheetsService';
 
 const ShoppingLists: React.FC = () => {
   const [lists, setLists] = useState<string[]>([]);
@@ -21,6 +19,8 @@ const ShoppingLists: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
+  const [newItems, setNewItems] = useState<{ product: string; quantity: number }[]>([{ product: '', quantity: 1 }]);
+  const [selectedItem, setSelectedItem] = useState<ShoppingListItem | null>(null);
 
   useEffect(() => {
     loadLists();
@@ -82,53 +82,70 @@ const ShoppingLists: React.FC = () => {
   };
 
   const handleOpenAddItemDialog = () => {
+    setNewItems([{ product: '', quantity: 1 }]);
     setAddItemDialogOpen(true);
   };
 
   const handleCloseAddItemDialog = () => {
     setAddItemDialogOpen(false);
-    setNewProduct('');
-    setNewQuantity(1);
   };
 
-  const handleAddItem = async () => {
-    if (newProduct && selectedList) {
-      const newItem: ShoppingListItem = {
-        product: newProduct,
-        quantity: newQuantity,
-        listName: selectedList,
-        date: new Date().toISOString(),
-        status: 'ממתין'
-      };
-      setItems(prevItems => [...prevItems, newItem]);
-      handleCloseAddItemDialog();
+  const handleAddNewItemField = () => {
+    setNewItems([...newItems, { product: '', quantity: 1 }]);
+  };
 
-      try {
-        await addShoppingListItem(newItem);
-      } catch (err) {
-        setError('Failed to add item to the sheet');
-        setItems(prevItems => prevItems.filter(item => item.product !== newItem.product));
+  const handleNewItemChange = (index: number, field: 'product' | 'quantity', value: string | number) => {
+    const updatedItems = [...newItems];
+    updatedItems[index][field] = value as never; // Type assertion to avoid TS error
+    setNewItems(updatedItems);
+  };
+
+  const handleAddItems = async () => {
+    if (selectedList) {
+      const validItems = newItems.filter(item => item.product.trim() !== '');
+      setAddItemDialogOpen(false); // סגירת הדיאלוג מיד לאחר הלחיצה
+      for (const item of validItems) {
+        const newItem: ShoppingListItem = {
+          product: item.product,
+          quantity: item.quantity,
+          listName: selectedList,
+          date: new Date().toISOString(),
+          status: 'ממתין'
+        };
+        setItems(prevItems => [...prevItems, newItem]);
+        try {
+          await addShoppingListItem(newItem);
+        } catch (err) {
+          setError(`Failed to add item "${item.product}" to the sheet`);
+          setItems(prevItems => prevItems.filter(i => i.product !== item.product));
+        }
       }
+      setNewItems([{ product: '', quantity: 1 }]); // איפוס שדות ההוספה
     }
   };
 
   const handleToggleItem = async (product: string, currentStatus: 'ממתין' | 'נרכש') => {
-    const newStatus = currentStatus === 'ממתין' ? 'נרכש' : 'ממתין';
-    setItems(prevItems => 
-      prevItems.map(item => 
-        item.product === product ? { ...item, status: newStatus } : item
-      )
-    );
-
-    try {
-      await updateShoppingListItemStatus(selectedList, product, newStatus);
-    } catch (err) {
-      setError('Failed to update item status');
+    const newStatus: 'ממתין' | 'נרכש' = currentStatus === 'ממתין' ? 'נרכש' : 'ממתין';
+    const updatedItem = items.find(item => item.product === product);
+    
+    if (updatedItem) {
+      const newItem: ShoppingListItem = { ...updatedItem, status: newStatus };
       setItems(prevItems => 
         prevItems.map(item => 
-          item.product === product ? { ...item, status: currentStatus } : item
+          item.product === product ? newItem : item
         )
       );
+
+      try {
+        await updateShoppingListItem(selectedList, product, newItem);
+      } catch (err) {
+        setError('Failed to update item status');
+        setItems(prevItems => 
+          prevItems.map(item => 
+            item.product === product ? updatedItem : item
+          )
+        );
+      }
     }
   };
 
@@ -143,38 +160,26 @@ const ShoppingLists: React.FC = () => {
     }
   };
 
-  const handleEditItem = (item: ShoppingListItem) => {
-    setEditItem(item);
+  const handleItemClick = (item: ShoppingListItem) => {
+    setSelectedItem({...item});
   };
 
-  const handleSaveEdit = async () => {
-    if (editItem) {
-      const originalItem = items.find(item => item.product === editItem.product);
-      setItems(prevItems => 
-        prevItems.map(item => 
-          item.product === editItem.product ? editItem : item
-        )
-      );
-      setEditItem(null);
+  const handleCloseItemDialog = () => {
+    setSelectedItem(null);
+  };
 
+  const handleUpdateItem = async () => {
+    if (selectedItem) {
       try {
-        await updateShoppingListItem(selectedList, editItem);
+        const oldProduct = items.find(item => item.product === selectedItem.product)?.product || selectedItem.product;
+        await updateShoppingListItem(selectedList, oldProduct, selectedItem);
+        setItems(prevItems => prevItems.map(item => 
+          item.product === oldProduct ? selectedItem : item
+        ));
+        handleCloseItemDialog();
       } catch (err) {
         setError('Failed to update item');
-        if (originalItem) {
-          setItems(prevItems => 
-            prevItems.map(item => 
-              item.product === editItem.product ? originalItem : item
-            )
-          );
-        }
       }
-    }
-  };
-
-  const handleKeyPress = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Enter') {
-      handleAddItem();
     }
   };
 
@@ -194,7 +199,7 @@ const ShoppingLists: React.FC = () => {
 
   return (
     <Box sx={{ maxWidth: 800, margin: 'auto', mt: 4, p: 2, position: 'relative', minHeight: '80vh' }}>
-      <Typography variant="h4" gutterBottom align="center">רשימות קניה</Typography>
+      <Typography variant="h4" gutterBottom align="center">רשימת קניות</Typography>
       
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
         <IconButton onClick={handleRefresh} color="primary" disabled={isLoading}>
@@ -204,13 +209,13 @@ const ShoppingLists: React.FC = () => {
 
       <Paper elevation={3} sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>בחר רשימה קיימת</Typography>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>בחר מרשימה קיימת</Typography>
           <IconButton color="primary" onClick={() => setOpenDialog(true)}>
             <PlaylistAddIcon />
           </IconButton>
         </Box>
         <FormControl fullWidth>
-          <InputLabel>רשימות קניה</InputLabel>
+          <InputLabel>רשימות קניות</InputLabel>
           <Select
             value={selectedList}
             onChange={(e) => setSelectedList(e.target.value as string)}
@@ -225,46 +230,20 @@ const ShoppingLists: React.FC = () => {
       {selectedList && (
         <Paper elevation={3} sx={{ p: 2 }}>
           <Typography variant="h5" gutterBottom>{selectedList}</Typography>
-          <Box sx={{ mb: 2, display: 'flex', alignItems: 'flex-end' }}>
-            <TextField
-              label="מוצר חדש"
-              value={newProduct}
-              onChange={(e) => setNewProduct(e.target.value)}
-              onKeyPress={handleKeyPress}
-              sx={{ mr: 1, flexGrow: 1 }}
-            />
-            <TextField
-              label="כמות"
-              type="number"
-              value={newQuantity}
-              onChange={(e) => setNewQuantity(parseInt(e.target.value, 10))}
-              onKeyPress={handleKeyPress}
-              sx={{ mr: 1, width: 70 }}
-            />
-            <Button 
-              variant="contained" 
-              onClick={handleAddItem} 
-              startIcon={<AddIcon />}
-              sx={{ height: '56px', minWidth: '120px', ml: 2 }} // Added ml: 2 for left margin
-            >
-              הוסף
-            </Button>
-          </Box>
 
           <Typography variant="h6">מוצרים לקניה</Typography>
           <List>
             {pendingItems.map((item) => (
-              <ListItem key={item.product} disablePadding>
-                <IconButton edge="start" onClick={() => handleToggleItem(item.product, item.status)}>
+              <ListItem 
+                key={item.product} 
+                disablePadding 
+                onClick={() => handleItemClick(item)}
+                sx={{ cursor: 'pointer' }}
+              >
+                <IconButton edge="start" onClick={(e) => { e.stopPropagation(); handleToggleItem(item.product, item.status); }}>
                   {renderStatusIcon(item.status)}
                 </IconButton>
                 <ListItemText primary={`${item.product} (${item.quantity})`} />
-                <IconButton edge="end" aria-label="edit" onClick={() => handleEditItem(item)}>
-                  <EditIcon />
-                </IconButton>
-                <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteItem(item.product)}>
-                  <DeleteIcon />
-                </IconButton>
               </ListItem>
             ))}
           </List>
@@ -274,20 +253,19 @@ const ShoppingLists: React.FC = () => {
               <Typography variant="h6">מוצרים שנרכשו</Typography>
               <List>
                 {purchasedItems.map((item) => (
-                  <ListItem key={item.product} disablePadding>
-                    <IconButton edge="start" onClick={() => handleToggleItem(item.product, item.status)}>
+                  <ListItem 
+                    key={item.product} 
+                    disablePadding
+                    onClick={() => handleItemClick(item)}
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    <IconButton edge="start" onClick={(e) => { e.stopPropagation(); handleToggleItem(item.product, item.status); }}>
                       {renderStatusIcon(item.status)}
                     </IconButton>
                     <ListItemText 
                       primary={`${item.product} (${item.quantity})`} 
                       sx={{ textDecoration: 'line-through' }} 
                     />
-                    <IconButton edge="end" aria-label="edit" onClick={() => handleEditItem(item)}>
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteItem(item.product)}>
-                      <DeleteIcon />
-                    </IconButton>
                   </ListItem>
                 ))}
               </List>
@@ -310,7 +288,7 @@ const ShoppingLists: React.FC = () => {
       </Fab>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
-        <DialogTitle>צור רשימה חדשה</DialogTitle>
+        <DialogTitle>צור רשימת קניות חדשה</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -329,58 +307,67 @@ const ShoppingLists: React.FC = () => {
       </Dialog>
 
       <Dialog open={addItemDialogOpen} onClose={handleCloseAddItemDialog}>
-        <DialogTitle>הוסף מוצר חדש</DialogTitle>
+        <DialogTitle>הוסף מוצרים חדשים</DialogTitle>
         <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="שם המוצר"
-            fullWidth
-            variant="standard"
-            value={newProduct}
-            onChange={(e) => setNewProduct(e.target.value)}
-          />
-          <TextField
-            margin="dense"
-            label="כמות"
-            type="number"
-            fullWidth
-            variant="standard"
-            value={newQuantity}
-            onChange={(e) => setNewQuantity(parseInt(e.target.value, 10))}
-          />
+          {newItems.map((item, index) => (
+            <Box key={index} sx={{ display: 'flex', mb: 2 }}>
+              <TextField
+                label="שם המוצר"
+                value={item.product}
+                onChange={(e) => handleNewItemChange(index, 'product', e.target.value)}
+                sx={{ mr: 1, flexGrow: 1 }}
+              />
+              <TextField
+                label="כמות"
+                type="number"
+                value={item.quantity}
+                onChange={(e) => handleNewItemChange(index, 'quantity', parseInt(e.target.value, 10))}
+                sx={{ width: 70 }}
+              />
+            </Box>
+          ))}
+          <Button onClick={handleAddNewItemField}>הוסף שדה מוצר נוסף</Button>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseAddItemDialog}>ביטול</Button>
-          <Button onClick={handleAddItem}>הוסף</Button>
+          <Button onClick={handleAddItems}>הוסף</Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!editItem} onClose={() => setEditItem(null)}>
-        <DialogTitle>ערוך מוצר</DialogTitle>
+      <Dialog open={!!selectedItem} onClose={handleCloseItemDialog}>
+        <DialogTitle>עריכת מוצר</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
             label="שם המוצר"
             fullWidth
-            variant="standard"
-            value={editItem?.product || ''}
-            onChange={(e) => setEditItem(prev => prev ? {...prev, product: e.target.value} : null)}
+            value={selectedItem?.product || ''}
+            onChange={(e) => setSelectedItem(prev => prev ? {...prev, product: e.target.value} : null)}
           />
           <TextField
             margin="dense"
             label="כמות"
             type="number"
             fullWidth
-            variant="standard"
-            value={editItem?.quantity || ''}
-            onChange={(e) => setEditItem(prev => prev ? {...prev, quantity: parseInt(e.target.value, 10)} : null)}
+            value={selectedItem?.quantity || ''}
+            onChange={(e) => setSelectedItem(prev => prev ? {...prev, quantity: parseInt(e.target.value, 10)} : null)}
           />
+          <FormControl fullWidth margin="dense">
+            <InputLabel>סטטוס</InputLabel>
+            <Select
+              value={selectedItem?.status || 'ממתין'}
+              onChange={(e) => setSelectedItem(prev => prev ? {...prev, status: e.target.value as 'ממתין' | 'נרכש'} : null)}
+            >
+              <MenuItem value="ממתין">ממתין</MenuItem>
+              <MenuItem value="נרכש">נרכש</MenuItem>
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditItem(null)}>ביטול</Button>
-          <Button onClick={handleSaveEdit}>שמור</Button>
+          <Button onClick={handleCloseItemDialog}>ביטול</Button>
+          <Button onClick={handleUpdateItem}>שמור</Button>
+          <Button onClick={() => { handleDeleteItem(selectedItem!.product); handleCloseItemDialog(); }} color="error">מחק</Button>
         </DialogActions>
       </Dialog>
 

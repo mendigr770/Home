@@ -166,14 +166,16 @@ export async function addShoppingListItem(item: Omit<ShoppingListItem, 'date'>) 
   }
 }
 
-export async function updateShoppingListItemStatus(listName: string, product: string, newStatus: 'ממתין' | 'נרכש') {
+export async function updateShoppingListItem(listName: string, oldProduct: string, updatedItem: ShoppingListItem) {
   try {
     await initializeSheet();
     const sheet = doc.sheetsByIndex[3]; // גיליון4
     const rows = await sheet.getRows();
-    const rowToUpdate = rows.find(row => row['שם הרשימה'] === listName && row['מוצר'] === product);
+    const rowToUpdate = rows.find(row => row['שם הרשימה'] === listName && row['מוצר'] === oldProduct);
     if (rowToUpdate) {
-      rowToUpdate['סטטוס'] = newStatus;
+      rowToUpdate['מוצר'] = updatedItem.product;
+      rowToUpdate['כמות'] = updatedItem.quantity;
+      rowToUpdate['סטטוס'] = updatedItem.status;
       await rowToUpdate.save();
     }
   } catch (error) {
@@ -195,15 +197,14 @@ export async function deleteShoppingListItem(listName: string, product: string) 
   }
 }
 
-export async function updateShoppingListItem(listName: string, updatedItem: ShoppingListItem) {
+export async function updateShoppingListItemStatus(listName: string, product: string, newStatus: 'ממתין' | 'נרכש') {
   try {
     await initializeSheet();
     const sheet = doc.sheetsByIndex[3]; // גיליון4
     const rows = await sheet.getRows();
-    const rowToUpdate = rows.find(row => row['שם הרשימה'] === listName && row['מוצר'] === updatedItem.product);
+    const rowToUpdate = rows.find(row => row['שם הרשימה'] === listName && row['מוצר'] === product);
     if (rowToUpdate) {
-      rowToUpdate['מוצר'] = updatedItem.product;
-      rowToUpdate['כמות'] = updatedItem.quantity;
+      rowToUpdate['סטטוס'] = newStatus;
       await rowToUpdate.save();
     }
   } catch (error) {

@@ -16,34 +16,34 @@ const theme = createTheme({
   },
   palette: {
     primary: {
-      main: '#94B49F', // פסטל ירוק
-      light: '#B4CFB0',
-      dark: '#789E87',
+      main: '#49a078',
+      light: '#9cc5a1',
+      dark: '#216869',
     },
     secondary: {
-      main: '#FCB5AC', // פסטל ורוד-כתום
-      light: '#FFC8C0',
-      dark: '#E5A298',
+      main: '#dce1de',
+      light: '#ffffff',
+      dark: '#aab0ad',
     },
     background: {
-      default: '#F5E6D3', // פסטל בז' בהיר
-      paper: '#FFFFFF',
+      default: '#dce1de',
+      paper: '#ffffff',
     },
     text: {
-      primary: '#4A4A4A',
-      secondary: '#6B6B6B',
+      primary: '#1f2421',
+      secondary: '#216869',
     },
     error: {
-      main: '#E57373', // פסטל אדום
+      main: '#d32f2f',
     },
     warning: {
-      main: '#FFD54F', // פסטל צהוב
+      main: '#ffa000',
     },
     info: {
-      main: '#81D4FA', // פסטל כחול
+      main: '#1976d2',
     },
     success: {
-      main: '#81C784', // פסטל ירוק בהיר
+      main: '#388e3c',
     },
   },
   components: {
@@ -74,17 +74,26 @@ const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: '#94B49F', // פסטל ירוק
+          backgroundColor: '#49a078',
+          borderRadius: 0,
         },
       },
     },
     MuiFab: {
       styleOverrides: {
         root: {
-          backgroundColor: '#FCB5AC', // פסטל ורוד-כתום
+          backgroundColor: '#9cc5a1',
+          color: '#1f2421',
           '&:hover': {
-            backgroundColor: '#E5A298',
+            backgroundColor: '#49a078',
           },
+        },
+      },
+    },
+    MuiToolbar: {
+      styleOverrides: {
+        root: {
+          borderRadius: 0,
         },
       },
     },

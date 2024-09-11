@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, 
-  TextField, Select, MenuItem, FormControl, InputLabel, Fab, Tooltip
+  TextField, Select, MenuItem, FormControl, InputLabel, Fab, Tooltip, IconButton, Skeleton
 } from '@mui/material';
 import { fetchAllExpenses, fetchCategories, Expense } from '../services/googleSheetsService';
 import AddIcon from '@mui/icons-material/Add';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { Link, useLocation } from 'react-router-dom';
 
 const ExpensesTable: React.FC = () => {
@@ -13,12 +14,28 @@ const ExpensesTable: React.FC = () => {
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [loading, setLoading] = useState(true);
 
   const location = useLocation();
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [fetchedExpenses, fetchedCategories] = await Promise.all([
+        fetchAllExpenses(),
+        fetchCategories()
+      ]);
+      setExpenses(fetchedExpenses);
+      setCategories(fetchedCategories);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchAllExpenses().then(setExpenses);
-    fetchCategories().then(setCategories);
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -37,12 +54,23 @@ const ExpensesTable: React.FC = () => {
     setFilteredExpenses(filtered);
   }, [expenses, categoryFilter, searchTerm]);
 
+  const totalAmount = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    return `${month}/${day}`; // שינוי הסדר כאן
+    return `${month}/${day}`;
   };
+
+  const renderSkeletonRow = () => (
+    <TableRow>
+      <TableCell><Skeleton variant="text" /></TableCell>
+      <TableCell><Skeleton variant="text" /></TableCell>
+      <TableCell><Skeleton variant="text" /></TableCell>
+      <TableCell><Skeleton variant="text" /></TableCell>
+    </TableRow>
+  );
 
   return (
     <Box sx={{ 
@@ -52,7 +80,12 @@ const ExpensesTable: React.FC = () => {
       position: 'relative',
       paddingBottom: '70px'
     }}>
-      <Typography variant="h4" gutterBottom align="right">טבלת הוצאות</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h4">טבלת הוצאות</Typography>
+        <IconButton onClick={fetchData} disabled={loading}>
+          <RefreshIcon />
+        </IconButton>
+      </Box>
       <Box sx={{ display: 'flex', gap: 2, mb: 2, justifyContent: 'flex-start' }}>
         <TextField
           label="חיפוש לפי תיאור"
@@ -89,16 +122,35 @@ const ExpensesTable: React.FC = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredExpenses.map((expense) => (
-              <TableRow key={expense.id}>
-                <Tooltip title={expense.date} arrow placement="top">
-                  <TableCell align="right">{formatDate(expense.date)}</TableCell>
-                </Tooltip>
-                <TableCell align="right">{expense.description}</TableCell>
-                <TableCell align="right">{new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(expense.amount)}</TableCell>
-                <TableCell align="right">{expense.category}</TableCell>
-              </TableRow>
-            ))}
+            {loading ? (
+              Array.from({ length: 5 }).map((_, index) => renderSkeletonRow())
+            ) : (
+              <>
+                {filteredExpenses.map((expense) => (
+                  <TableRow key={expense.id}>
+                    <Tooltip title={expense.date} arrow placement="top">
+                      <TableCell align="right">{formatDate(expense.date)}</TableCell>
+                    </Tooltip>
+                    <TableCell align="right">{expense.description}</TableCell>
+                    <TableCell align="right">{new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(expense.amount)}</TableCell>
+                    <TableCell align="right">{expense.category}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow>
+                  <TableCell colSpan={2} align="right">
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      סך הכל:
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(totalAmount)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </>
+            )}
           </TableBody>
         </Table>
       </TableContainer>

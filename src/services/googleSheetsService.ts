@@ -54,7 +54,8 @@ export async function addExpense(amount: number, description: string, category: 
     });
     return newRow.id;
   } catch (error) {
-    return handleApiError(error);
+    console.error('Error adding expense to Google Sheets:', error);
+    throw error;
   }
 }
 
@@ -274,7 +275,8 @@ export async function updateExpense(expense: Expense): Promise<void> {
       throw new Error('Expense not found');
     }
   } catch (error) {
-    return handleApiError(error);
+    console.error('Error updating expense in Google Sheets:', error);
+    throw error;
   }
 }
 
@@ -290,6 +292,7 @@ export async function deleteExpense(id: string): Promise<void> {
       throw new Error('Expense not found');
     }
   } catch (error) {
-    return handleApiError(error);
+    console.error('Error deleting expense from Google Sheets:', error);
+    throw error;
   }
 }

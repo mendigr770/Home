@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { 
   Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, 
   TextField, Select, MenuItem, FormControl, InputLabel, Fab, Tooltip, IconButton, Skeleton, Dialog, DialogTitle, DialogContent, DialogActions, Button,
-  useMediaQuery, useTheme, CircularProgress, List, ListItem, ListItemText
+  useMediaQuery, useTheme, CircularProgress, List, ListItem, ListItemText, Popover
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { fetchAllExpenses, fetchCategories, Expense, deleteExpense, updateExpense } from '../services/googleSheetsService';
+import { fetchAllExpenses, fetchCategories, Expense, deleteExpense, updateExpense, addExpense } from '../services/googleSheetsService';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import SearchIcon from '@mui/icons-material/Search';
+import DownloadIcon from '@mui/icons-material/Download'; // הוספנו אייקון חדש
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useFilter, DateRange } from '../contexts/FilterContext';
 import { startOfMonth, endOfMonth, subMonths, parseISO, format, isValid, parse } from 'date-fns';
@@ -27,6 +28,8 @@ const ExpensesTable: React.FC = () => {
   const [openDatePicker, setOpenDatePicker] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [currentEditExpense, setCurrentEditExpense] = useState<Expense | null>(null);
+  const [addExpenseAnchorEl, setAddExpenseAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -175,16 +178,19 @@ const ExpensesTable: React.FC = () => {
   const handleSaveEdit = async (editedExpense: Expense) => {
     setIsUpdating(true);
     try {
-      // שמירה על התאריך המקורי
-      const updatedExpense = {
-        ...editedExpense,
-        date: currentEditExpense?.date || editedExpense.date
-      };
-      await updateExpense(updatedExpense);
+      // עדכון מקומי
+      const updatedExpenses = allExpenses.map(exp => 
+        exp.id === editedExpense.id ? editedExpense : exp
+      );
+      setAllExpenses(updatedExpenses);
       setEditDialogOpen(false);
-      await fetchData(); // Refresh data after update
+
+      // סנכרון עם הגיליון
+      await updateExpense(editedExpense);
     } catch (error) {
       console.error('Error updating expense:', error);
+      // במקרה של שגיאה, נחזיר את המצב הקודם
+      await fetchData();
     } finally {
       setIsUpdating(false);
     }
@@ -193,11 +199,17 @@ const ExpensesTable: React.FC = () => {
   const handleDeleteExpense = async () => {
     if (currentEditExpense && window.confirm('האם אתה בטוח שברצונך למחוק הוצאה זו?')) {
       try {
-        await deleteExpense(currentEditExpense.id);
+        // מחיקה מקומית
+        const updatedExpenses = allExpenses.filter(exp => exp.id !== currentEditExpense.id);
+        setAllExpenses(updatedExpenses);
         setEditDialogOpen(false);
-        await fetchData(); // Refresh data after deletion
+
+        // סנכרון עם הגיליון
+        await deleteExpense(currentEditExpense.id);
       } catch (error) {
         console.error('Error deleting expense:', error);
+        // במקרה של שגיאה, נחזיר את המצב הקודם
+        await fetchData();
       }
     }
   };
@@ -274,6 +286,11 @@ const ExpensesTable: React.FC = () => {
         <IconButton onClick={fetchData} disabled={loading}>
           <RefreshIcon />
         </IconButton>
+        <Tooltip title="הורד כקובץ CSV">
+          <IconButton onClick={handleDownloadCSV} disabled={loading || filteredExpenses.length === 0}>
+            <DownloadIcon />
+          </IconButton>
+        </Tooltip>
       </Box>
     </Box>
   );
@@ -292,6 +309,69 @@ const ExpensesTable: React.FC = () => {
     setDateRangeDialogOpen(false);
     if (isMobile) {
       setOpenDatePicker(false); // סגירת הדיאלוג של בחירת טווח התאריכים במובייל
+    }
+  };
+
+  const handleDownloadCSV = () => {
+    const headers = ['תאריך', 'תיאור', 'סכום', 'קטגוריה'];
+    const bom = '\uFEFF'; // הוספת BOM לתמיכה בתווים בעברית
+    const csvContent = bom + [
+      headers.join(','),
+      ...filteredExpenses.map(expense => 
+        [
+          formatDate(expense.date), // שימוש בפונקציית formatDate
+          `"${expense.description.replace(/"/g, '""')}"`, // מטפל במקרה של פסיקים בתיאור
+          expense.amount,
+          expense.category
+        ].join(',')
+      )
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `expenses_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleAddExpenseClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAddExpenseAnchorEl(event.currentTarget);
+  };
+
+  const handleAddExpenseClose = () => {
+    setAddExpenseAnchorEl(null);
+  };
+
+  const handleAddExpenseSave = async (expense: Omit<Expense, 'id'>) => {
+    setIsAddingExpense(true);
+    try {
+      // יצירת מזהה זמני
+      const tempId = `temp_${Date.now()}`;
+      const newExpense = { ...expense, id: tempId };
+
+      // הוספה מקומית
+      setAllExpenses(prev => [...prev, newExpense]);
+      handleAddExpenseClose();
+
+      // סנכרון עם הגיליון
+      const newId = await addExpense(expense.amount, expense.description, expense.category);
+      
+      // עדכון המזהה הקבוע
+      setAllExpenses(prev => prev.map(exp => 
+        exp.id === tempId ? { ...exp, id: newId } : exp
+      ));
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      // במקרה של שגיאה, נחזיר את המצב הקודם
+      await fetchData();
+    } finally {
+      setIsAddingExpense(false);
     }
   };
 
@@ -375,8 +455,7 @@ const ExpensesTable: React.FC = () => {
         <Fab 
           color="primary" 
           aria-label="הוסף הוצאה חדשה" 
-          component={Link} 
-          to="/add-expense"
+          onClick={handleAddExpenseClick}
           sx={{
             position: 'fixed',
             bottom: 16,
@@ -387,6 +466,29 @@ const ExpensesTable: React.FC = () => {
           <AddIcon />
         </Fab>
       </Tooltip>
+
+      <Popover
+        open={Boolean(addExpenseAnchorEl)}
+        anchorEl={addExpenseAnchorEl}
+        onClose={handleAddExpenseClose}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+      >
+        <Box sx={{ p: 2, width: 300 }}>
+          <ExpenseForm
+            onSave={handleAddExpenseSave}
+            onCancel={handleAddExpenseClose}
+            isUpdating={isAddingExpense}
+            onDelete={() => {}} // לא רלוונטי להוספת הוצאה חדשה
+          />
+        </Box>
+      </Popover>
 
       <Dialog open={dateRangeDialogOpen} onClose={() => setDateRangeDialogOpen(false)}>
         <DialogTitle>בחר טווח תאריכים</DialogTitle>

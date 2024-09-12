@@ -17,6 +17,7 @@ import { useFilter, DateRange } from '../contexts/FilterContext';
 import { startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, format, parse, isValid } from 'date-fns';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import DownloadIcon from '@mui/icons-material/Download';
 
 ChartJS.register(ArcElement, ChartTooltip, Legend);
 
@@ -296,14 +297,26 @@ const Dashboard: React.FC = () => {
   const renderOverallPieChart = () => {
     const totalSpent = filteredBudgetData.reduce((sum, item) => sum + item.spent, 0);
   
+    const colors = [
+      theme.palette.primary.main,
+      theme.palette.secondary.main,
+      theme.palette.info.main,
+      theme.palette.success.main,
+      theme.palette.warning.main,
+      theme.palette.error.main,
+      theme.palette.primary.light,
+      theme.palette.secondary.light,
+      theme.palette.info.light,
+      theme.palette.success.light,
+      theme.palette.warning.light,
+      theme.palette.error.light,
+    ];
+
     const data = {
       labels: filteredBudgetData.map(item => item.category),
       datasets: [{
         data: filteredBudgetData.map(item => item.spent),
-        backgroundColor: [
-          '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40',
-          '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
-        ],
+        backgroundColor: filteredBudgetData.map((_, index) => colors[index % colors.length]),
       }],
     };
 
@@ -313,6 +326,9 @@ const Dashboard: React.FC = () => {
       plugins: {
         legend: {
           position: 'right' as const,
+          labels: {
+            color: theme.palette.text.primary,
+          },
         },
         tooltip: {
           callbacks: {
@@ -322,7 +338,11 @@ const Dashboard: React.FC = () => {
               const percentage = ((value / totalSpent) * 100).toFixed(2);
               return `${label}: ${percentage}% (${new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(value)})`;
             }
-          }
+          },
+          bodyColor: theme.palette.text.primary,
+          backgroundColor: theme.palette.background.paper,
+          borderColor: theme.palette.divider,
+          borderWidth: 1,
         }
       }
     };
@@ -335,9 +355,13 @@ const Dashboard: React.FC = () => {
         display: 'flex', 
         flexDirection: 'column',
         justifyContent: 'center', 
-        alignItems: 'center' 
+        alignItems: 'center',
+        backgroundColor: theme.palette.background.paper,
+        borderRadius: 2,
+        padding: 2,
+        boxShadow: theme.shadows[3],
       }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h6" gutterBottom color="textPrimary">
           סך כל ההוצאות: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(totalSpent)}
         </Typography>
         <Box sx={{ width: '100%', height: '100%' }}>

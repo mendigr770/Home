@@ -15,6 +15,13 @@ const handleApiError = (error: any) => {
   throw new Error('Failed to perform operation');
 };
 
+export interface BudgetData {
+  category: string;
+  budget: number;
+  spent: number;
+  date: string;
+}
+
 export async function fetchCategories(): Promise<string[]> {
   try {
     await initializeSheet();
@@ -44,27 +51,55 @@ export async function addExpense(amount: number, description: string, category: 
   }
 }
 
-export async function fetchBudgetData(): Promise<{ category: string; budget: number; spent: number; }[]> {
+export async function fetchBudgetData(): Promise<BudgetData[]> {
   try {
     await initializeSheet();
-    const budgetSheet = doc.sheetsByIndex[2];
-    const expensesSheet = doc.sheetsByIndex[1];
+    const budgetSheet = doc.sheetsByIndex[2]; // גיליון3 (Budget sheet)
+    const expensesSheet = doc.sheetsByIndex[1]; // גיליון2 (Expenses sheet)
 
     const budgetRows = await budgetSheet.getRows();
     const expenseRows = await expensesSheet.getRows();
 
     if (budgetRows.length === 0) return [];
 
-    const budgetData = budgetRows.map(row => ({
-      category: row['קטגוריה'] || row.קטגוריה,
-      budget: parseFloat(row['סכום'] || row.סכום) || 0,
-      spent: expenseRows
-        .filter(expRow => (expRow['קטגוריה'] || expRow.קטגוריה) === (row['קטגוריה'] || row.קטגוריה))
-        .reduce((sum, expRow) => sum + (parseFloat(expRow['סכום'] || expRow.סכום) || 0), 0),
-    }));
+    const parseDate = (dateString: string) => {
+      const [day, month, year] = dateString.split('.');
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    };
 
+    const budgetData: BudgetData[] = budgetRows.map(row => {
+      const category = row['קטגוריה'] || row.קטגוריה;
+      const budget = parseFloat(row['סכום'] || row.סכום) || 0;
+      const budgetDate = row['תאריך'] || '';
+      
+      const categoryExpenses = expenseRows.filter(expRow => 
+        (expRow['קטגוריה'] || expRow.קטגוריה) === category
+      );
+
+      const spent = categoryExpenses.reduce((sum, expRow) => {
+        const expenseDate = parseDate(expRow['תאריך']);
+        const budgetDateObj = parseDate(budgetDate);
+        
+        // Check if the expense date is in the same month and year as the budget date
+        if (expenseDate.getMonth() === budgetDateObj.getMonth() &&
+            expenseDate.getFullYear() === budgetDateObj.getFullYear()) {
+          return sum + (parseFloat(expRow['סכום'] || expRow.סכום) || 0);
+        }
+        return sum;
+      }, 0);
+
+      return {
+        category,
+        budget,
+        spent,
+        date: budgetDate,
+      };
+    });
+
+    console.log('Fetched budget data:', budgetData);
     return budgetData;
   } catch (error) {
+    console.error('Error in fetchBudgetData:', error);
     return handleApiError(error);
   }
 }
@@ -82,14 +117,18 @@ export async function fetchAllExpenses(): Promise<Expense[]> {
     await initializeSheet();
     const sheet = doc.sheetsByIndex[1]; // Expenses sheet
     const rows = await sheet.getRows();
-    return rows.map((row, index) => ({
+    console.log('Raw rows from Google Sheets:', rows);
+    const expenses = rows.map((row, index) => ({
       id: index.toString(),
       date: row['תאריך'] || '',
       description: row['תיאור'] || '',
       amount: parseFloat(row['סכום'] || '0'),
       category: row['קטגוריה'] || '',
     }));
+    console.log('Parsed expenses:', expenses);
+    return expenses;
   } catch (error) {
+    console.error('Error in fetchAllExpenses:', error);
     return handleApiError(error);
   }
 }

@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Typography, Grid, Paper, Tooltip, useTheme, useMediaQuery, Fab, Skeleton } from '@mui/material';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Box, Typography, Grid, Paper, Tooltip, useTheme, useMediaQuery, Fab, Skeleton, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Doughnut } from 'react-chartjs-2';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchBudgetData } from '../services/googleSheetsService';
@@ -10,6 +13,9 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import WarningIcon from '@mui/icons-material/Warning';
 import AddIcon from '@mui/icons-material/Add';
 import { Link } from 'react-router-dom';
+import { useFilter, DateRange } from '../contexts/FilterContext';
+import { startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, format, parse, isValid } from 'date-fns';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 ChartJS.register(ArcElement, ChartTooltip, Legend);
 
@@ -17,6 +23,7 @@ interface BudgetData {
   category: string;
   budget: number;
   spent: number;
+  date: string;
 }
 
 const encouragingMessages = [
@@ -33,20 +40,113 @@ const encouragingMessages = [
 ];
 
 const Dashboard: React.FC = () => {
+  const { startDate, endDate, dateRange, setDateRange } = useFilter();
   const [budgetData, setBudgetData] = useState<BudgetData[]>([]);
+  const [filteredBudgetData, setFilteredBudgetData] = useState<BudgetData[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [openDatePicker, setOpenDatePicker] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  useEffect(() => {
+  const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
+
+  const fetchData = async () => {
+    console.log('Dashboard: Fetching budget data...');
     setLoading(true);
-    fetchBudgetData().then(data => {
+    try {
+      const data = await fetchBudgetData();
+      console.log('Dashboard: Fetched budget data:', data);
       setBudgetData(data);
+    } catch (error) {
+      console.error('Dashboard: Error fetching budget data:', error);
+    } finally {
       setLoading(false);
-    });
+    }
     setMessage(encouragingMessages[Math.floor(Math.random() * encouragingMessages.length)]);
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
+
+  const parseDate = (dateString: string) => {
+    console.log('Dashboard: Parsing date:', dateString);
+    const [day, month, year] = dateString.split('.');
+    const parsedDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    console.log('Dashboard: Parsed date:', parsedDate);
+    return parsedDate;
+  };
+
+  useEffect(() => {
+    console.log('Dashboard: Filtering budget data...');
+    console.log('Dashboard: Current filters:', { startDate, endDate });
+    console.log('Dashboard: All budget data:', budgetData);
+    const filtered = budgetData.filter(item => {
+      const itemDate = parseDate(item.date);
+      console.log('Dashboard: Checking item:', item);
+      console.log('Dashboard: Item date:', itemDate);
+      
+      if (!isValid(itemDate)) {
+        console.error('Invalid date:', item.date);
+        return false;
+      }
+      
+      const dateMatch = (!startDate || itemDate >= startDate) && (!endDate || itemDate <= endDate);
+      console.log('Dashboard: Date match:', dateMatch);
+      return dateMatch;
+    });
+    console.log('Dashboard: Filtered budget data:', filtered);
+    setFilteredBudgetData(filtered);
+  }, [budgetData, startDate, endDate]);
+
+  const handleDateRangeChange = (newRange: DateRange) => {
+    console.log('Dashboard: Date range changed to:', newRange);
+    const now = new Date();
+    let start: Date | null = null;
+    let end: Date | null = null;
+
+    switch (newRange) {
+      case 'currentMonth':
+        start = startOfMonth(now);
+        end = endOfMonth(now);
+        break;
+      case 'lastMonth':
+        start = startOfMonth(subMonths(now, 1));
+        end = endOfMonth(subMonths(now, 1));
+        break;
+      case 'lastThreeMonths':
+        start = startOfMonth(subMonths(now, 2));
+        end = endOfMonth(now);
+        break;
+      case 'lastSixMonths':
+        start = startOfMonth(subMonths(now, 5));
+        end = endOfMonth(now);
+        break;
+      case 'custom':
+        setCustomStartDate(startDate);
+        setCustomEndDate(endDate);
+        setOpenDatePicker(true);
+        return; // Don't set the date range yet
+    }
+
+    if (start && end) {
+      setDateRange(newRange, format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd'));
+    }
+  };
+
+  const handleCustomDateConfirm = () => {
+    if (customStartDate && customEndDate) {
+      setDateRange('custom', format(customStartDate, 'yyyy-MM-dd'), format(customEndDate, 'yyyy-MM-dd'));
+    }
+    setOpenDatePicker(false);
+  };
+
+  const formatDateRange = (start: Date | null, end: Date | null) => {
+    if (!start || !end) return '';
+    return `${format(start, 'dd/MM/yy')} - ${format(end, 'dd/MM/yy')}`;
+  };
 
   const renderSkeletonLoader = () => (
     <Grid container spacing={isMobile ? 2 : 3}>
@@ -64,6 +164,14 @@ const Dashboard: React.FC = () => {
     </Grid>
   );
 
+  const handleStartDateChange = (newValue: Date | null) => {
+    setDateRange(dateRange, newValue ? format(newValue, 'yyyy-MM-dd') : null, endDate ? format(endDate, 'yyyy-MM-dd') : null);
+  };
+
+  const handleEndDateChange = (newValue: Date | null) => {
+    setDateRange(dateRange, startDate ? format(startDate, 'yyyy-MM-dd') : null, newValue ? format(newValue, 'yyyy-MM-dd') : null);
+  };
+
   return (
     <Box sx={{ 
       width: '100%',
@@ -79,9 +187,36 @@ const Dashboard: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <TrendingUpIcon sx={{ ml: 1 }} /> דשבורד הוצאות
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center' }}>
+            <TrendingUpIcon sx={{ ml: 1 }} /> דשבורד הוצאות
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <FormControl sx={{ minWidth: 120 }}>
+              <InputLabel id="date-range-label">מציג נתונים של</InputLabel>
+              <Select
+                labelId="date-range-label"
+                value={dateRange}
+                onChange={(e) => handleDateRangeChange(e.target.value as DateRange)}
+                label="מציג נתונים של"
+              >
+                <MenuItem value="currentMonth">חודש נוכחי</MenuItem>
+                <MenuItem value="lastMonth">חודש קודם</MenuItem>
+                <MenuItem value="lastThreeMonths">שלושה חודשים</MenuItem>
+                <MenuItem value="lastSixMonths">חצי שנה</MenuItem>
+                <MenuItem value="custom">טווח מותאם</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="body2">
+              {formatDateRange(startDate, endDate)}
+            </Typography>
+            <Tooltip title="רענן נתונים">
+              <IconButton onClick={fetchData} disabled={loading}>
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -94,7 +229,7 @@ const Dashboard: React.FC = () => {
         {loading ? renderSkeletonLoader() : (
           <Grid container spacing={isMobile ? 2 : 3}>
             <AnimatePresence>
-              {budgetData.map((item, index) => (
+              {filteredBudgetData.map((item, index) => (
                 <Grid item xs={12} sm={6} md={4} key={item.category}>
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
@@ -205,6 +340,27 @@ const Dashboard: React.FC = () => {
           <AddIcon />
         </Fab>
       </Tooltip>
+      <Dialog open={openDatePicker} onClose={() => setOpenDatePicker(false)}>
+        <DialogTitle>בחר טווח תאריכים</DialogTitle>
+        <DialogContent>
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <DatePicker
+              label="מתאריך"
+              value={customStartDate}
+              onChange={(newValue) => setCustomStartDate(newValue)}
+            />
+            <DatePicker
+              label="עד תאריך"
+              value={customEndDate}
+              onChange={(newValue) => setCustomEndDate(newValue)}
+            />
+          </LocalizationProvider>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDatePicker(false)}>ביטול</Button>
+          <Button onClick={handleCustomDateConfirm}>אישור</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

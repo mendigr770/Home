@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TextField, Button, Box, FormControl, InputLabel, Select, MenuItem, Typography, Snackbar, Alert } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { addExpense, fetchCategories } from '../services/googleSheetsService';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 const ExpenseForm: React.FC = () => {
   const [amount, setAmount] = useState<string>('');
@@ -11,7 +11,7 @@ const ExpenseForm: React.FC = () => {
   const [categories, setCategories] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
-  const history = useHistory();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchCategories().then(setCategories);
@@ -27,7 +27,7 @@ const ExpenseForm: React.FC = () => {
       await addExpense(parseFloat(amount), description, category);
       setSuccess(true);
       setTimeout(() => {
-        history.push('/');
+        navigate('/');
       }, 2000);
     } catch (err) {
       setError('אירעה שגיאה בהוספת ההוצאה');

@@ -4,8 +4,20 @@ import { Link as RouterLink } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import { useFilter } from '../contexts/FilterContext';
+import { format } from 'date-fns'; // Add this import
 
 const Header: React.FC = () => {
+  const { setDateRange } = useFilter();
+
+  const handleDateChange = (start: Date | null, end: Date | null) => {
+    setDateRange(
+      'custom', // או כל ערך אחר מתאים
+      start ? format(start, 'yyyy-MM-dd') : null,
+      end ? format(end, 'yyyy-MM-dd') : null
+    );
+  };
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 

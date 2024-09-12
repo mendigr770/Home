@@ -12,7 +12,7 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import WarningIcon from '@mui/icons-material/Warning';
 import AddIcon from '@mui/icons-material/Add';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useFilter, DateRange } from '../contexts/FilterContext';
 import { startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, format, parse, isValid } from 'date-fns';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -51,6 +51,8 @@ const Dashboard: React.FC = () => {
 
   const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
+
+  const navigate = useNavigate();
 
   const fetchData = async () => {
     console.log('Dashboard: Fetching budget data...');
@@ -172,6 +174,10 @@ const Dashboard: React.FC = () => {
     setDateRange(dateRange, startDate ? format(startDate, 'yyyy-MM-dd') : null, newValue ? format(newValue, 'yyyy-MM-dd') : null);
   };
 
+  const handleCategoryClick = (category: string) => {
+    navigate(`/expenses?category=${encodeURIComponent(category)}`);
+  };
+
   return (
     <Box sx={{ 
       width: '100%',
@@ -251,8 +257,7 @@ const Dashboard: React.FC = () => {
                             color: 'primary.main', // שינוי צבע בעת ריחוף
                           },
                         }}
-                        component={Link}
-                        to={`/expenses?category=${encodeURIComponent(item.category)}`}
+                        onClick={() => handleCategoryClick(item.category)}
                       >
                         <AccountBalanceWalletIcon sx={{ mr: 1 }} /> {item.category}
                       </Typography>

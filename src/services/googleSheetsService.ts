@@ -33,7 +33,7 @@ export async function fetchCategories(): Promise<string[]> {
   }
 }
 
-export async function addExpense(amount: number, description: string, category: string) {
+export async function addExpense(amount: number, description: string, category: string): Promise<string> {
   try {
     await initializeSheet();
     const sheet = doc.sheetsByIndex[1]; // Expenses sheet
@@ -44,8 +44,15 @@ export async function addExpense(amount: number, description: string, category: 
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
+    }).replace(/\//g, '.'); // החלפת / ב-. לפורמט הנדרש
+    const newRow = await sheet.addRow({ 
+      id: Date.now().toString(), // Generate a new unique ID
+      תאריך: currentDate, 
+      תיאור: description, 
+      סכום: amount, 
+      קטגוריה: category 
     });
-    await sheet.addRow({ תאריך: currentDate, תיאור: description, סכום: amount, קטגוריה: category });
+    return newRow.id;
   } catch (error) {
     return handleApiError(error);
   }
@@ -118,8 +125,8 @@ export async function fetchAllExpenses(): Promise<Expense[]> {
     const sheet = doc.sheetsByIndex[1]; // Expenses sheet
     const rows = await sheet.getRows();
     console.log('Raw rows from Google Sheets:', rows);
-    const expenses = rows.map((row, index) => ({
-      id: index.toString(),
+    const expenses = rows.map((row) => ({
+      id: row.id || row._rowNumber.toString(), // Use existing ID or row number as fallback
       date: row['תאריך'] || '',
       description: row['תיאור'] || '',
       amount: parseFloat(row['סכום'] || '0'),
@@ -245,6 +252,42 @@ export async function updateShoppingListItemStatus(listName: string, product: st
     if (rowToUpdate) {
       rowToUpdate['סטטוס'] = newStatus;
       await rowToUpdate.save();
+    }
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function updateExpense(expense: Expense): Promise<void> {
+  try {
+    await initializeSheet();
+    const sheet = doc.sheetsByIndex[1]; // Expenses sheet
+    const rows = await sheet.getRows();
+    const rowToUpdate = rows.find(row => row.id === expense.id);
+    if (rowToUpdate) {
+      rowToUpdate['תאריך'] = expense.date;
+      rowToUpdate['תיאור'] = expense.description;
+      rowToUpdate['סכום'] = expense.amount.toString();
+      rowToUpdate['קטגוריה'] = expense.category;
+      await rowToUpdate.save();
+    } else {
+      throw new Error('Expense not found');
+    }
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  try {
+    await initializeSheet();
+    const sheet = doc.sheetsByIndex[1]; // Expenses sheet
+    const rows = await sheet.getRows();
+    const rowToDelete = rows.find(row => row.id === id);
+    if (rowToDelete) {
+      await rowToDelete.delete();
+    } else {
+      throw new Error('Expense not found');
     }
   } catch (error) {
     return handleApiError(error);

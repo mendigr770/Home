@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, Grid, Paper, Tooltip, useTheme, useMediaQuery, Fab, Skeleton, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton } from '@mui/material';
+import { Box, Typography, Grid, Paper, Tooltip, useTheme, useMediaQuery, Fab, Skeleton, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Tabs, Tab, Menu } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { Doughnut } from 'react-chartjs-2';
+import { Doughnut, Pie } from 'react-chartjs-2';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchBudgetData } from '../services/googleSheetsService';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, ChartData } from 'chart.js';
@@ -16,6 +16,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useFilter, DateRange } from '../contexts/FilterContext';
 import { startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, format, parse, isValid } from 'date-fns';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 
 ChartJS.register(ArcElement, ChartTooltip, Legend);
 
@@ -53,6 +54,23 @@ const Dashboard: React.FC = () => {
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
 
   const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState(0);
+
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  const handleDateMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleDateMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleDateRangeChangeAndClose = (newRange: DateRange) => {
+    handleDateRangeChange(newRange);
+    handleDateMenuClose();
+  };
 
   const fetchData = async () => {
     console.log('Dashboard: Fetching budget data...');
@@ -178,6 +196,198 @@ const Dashboard: React.FC = () => {
     navigate(`/expenses?category=${encodeURIComponent(category)}`);
   };
 
+  const renderCurrentDashboard = () => (
+    <Grid container spacing={isMobile ? 2 : 3}>
+      <AnimatePresence>
+        {filteredBudgetData.map((item, index) => (
+          <Grid item xs={12} sm={6} md={4} key={item.category}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.3, delay: index * 0.1 }}
+            >
+              <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Typography 
+                  variant="h6" 
+                  gutterBottom 
+                  sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    color: 'text.primary', // שימוש בצבע טקסט רגיל
+                    textDecoration: 'none', // הסרת קו תחתון
+                    '&:hover': {
+                      color: 'primary.main', // שינוי צבע בעת ריחוף
+                    },
+                  }}
+                  onClick={() => handleCategoryClick(item.category)}
+                >
+                  <AccountBalanceWalletIcon sx={{ mr: 1 }} /> {item.category}
+                </Typography>
+                <Box sx={{ position: 'relative', height: 200, width: '100%' }}>
+                  <Doughnut
+                    data={{
+                      labels: ['הוצאות', 'נותר'],
+                      datasets: [{
+                        data: [item.spent, Math.max(0, item.budget - item.spent)],
+                        backgroundColor: ['#216869', '#9cc5a1'],
+                      }],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'bottom',
+                          labels: {
+                            color: '#1f2421',
+                          },
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: function(context) {
+                              let label = context.label || '';
+                              if (label) {
+                                label += ': ';
+                              }
+                              if (context.parsed !== undefined) {
+                                label += new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(context.parsed);
+                              }
+                              return label;
+                            }
+                          }
+                        }
+                      }
+                    }}
+                  />
+                </Box>
+                <Box sx={{ mt: 2, textAlign: 'center' }}>
+                  <Typography>
+                    תקציב: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(item.budget)}
+                  </Typography>
+                  <Typography>
+                    הוצאות: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(item.spent)}
+                  </Typography>
+                  {item.budget - item.spent >= 0 ? (
+                    <Tooltip title="כל שקל שנשאר הוא ניצחון קטן!">
+                      <Typography sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <EmojiEventsIcon sx={{ mr: 1, color: 'gold' }} />
+                        נותר: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(item.budget - item.spent)}
+                      </Typography>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip title="זה הזמן לחשוב על דרכים לחסוך!">
+                      <Typography sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'error.main' }}>
+                        <WarningIcon sx={{ mr: 1 }} />
+                        חריגה: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(Math.abs(item.budget - item.spent))}
+                      </Typography>
+                    </Tooltip>
+                  )}
+                </Box>
+              </Paper>
+            </motion.div>
+          </Grid>
+        ))}
+      </AnimatePresence>
+    </Grid>
+  );
+
+  const renderOverallPieChart = () => {
+    const totalSpent = filteredBudgetData.reduce((sum, item) => sum + item.spent, 0);
+  
+    const data = {
+      labels: filteredBudgetData.map(item => item.category),
+      datasets: [{
+        data: filteredBudgetData.map(item => item.spent),
+        backgroundColor: [
+          '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40',
+          '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+        ],
+      }],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right' as const,
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context: any) {
+              const label = context.label || '';
+              const value = context.raw || 0;
+              const percentage = ((value / totalSpent) * 100).toFixed(2);
+              return `${label}: ${percentage}% (${new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(value)})`;
+            }
+          }
+        }
+      }
+    };
+
+    return (
+      <Box sx={{ 
+        height: isMobile ? '50vh' : '66vh', 
+        width: isMobile ? '100%' : '66%',
+        margin: 'auto',
+        display: 'flex', 
+        flexDirection: 'column',
+        justifyContent: 'center', 
+        alignItems: 'center' 
+      }}>
+        <Typography variant="h6" gutterBottom>
+          סך כל ההוצאות: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(totalSpent)}
+        </Typography>
+        <Box sx={{ width: '100%', height: '100%' }}>
+          <Pie data={data} options={options} />
+        </Box>
+      </Box>
+    );
+  };
+
+  const renderDateFilter = () => {
+    if (isMobile) {
+      return (
+        <>
+          <IconButton onClick={handleDateMenuClick}>
+            <CalendarTodayIcon />
+          </IconButton>
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={handleDateMenuClose}
+          >
+            <MenuItem onClick={() => handleDateRangeChangeAndClose('currentMonth')}>חודש נוכחי</MenuItem>
+            <MenuItem onClick={() => handleDateRangeChangeAndClose('lastMonth')}>חודש קודם</MenuItem>
+            <MenuItem onClick={() => handleDateRangeChangeAndClose('lastThreeMonths')}>שלושה חודשים</MenuItem>
+            <MenuItem onClick={() => handleDateRangeChangeAndClose('lastSixMonths')}>חצי שנה</MenuItem>
+            <MenuItem onClick={() => { setOpenDatePicker(true); handleDateMenuClose(); }}>טווח מותאם</MenuItem>
+          </Menu>
+        </>
+      );
+    } else {
+      return (
+        <FormControl sx={{ minWidth: 120 }}>
+          <InputLabel id="date-range-label">מציג נתונים של</InputLabel>
+          <Select
+            labelId="date-range-label"
+            value={dateRange}
+            onChange={(e) => handleDateRangeChange(e.target.value as DateRange)}
+            label="מציג נתונים של"
+          >
+            <MenuItem value="currentMonth">חודש נוכחי</MenuItem>
+            <MenuItem value="lastMonth">חודש קודם</MenuItem>
+            <MenuItem value="lastThreeMonths">שלושה חודשים</MenuItem>
+            <MenuItem value="lastSixMonths">חצי שנה</MenuItem>
+            <MenuItem value="custom">טווח מותאם</MenuItem>
+          </Select>
+        </FormControl>
+      );
+    }
+  };
+
   return (
     <Box sx={{ 
       width: '100%',
@@ -198,24 +408,12 @@ const Dashboard: React.FC = () => {
             <TrendingUpIcon sx={{ ml: 1 }} /> דשבורד הוצאות
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel id="date-range-label">מציג נתונים של</InputLabel>
-              <Select
-                labelId="date-range-label"
-                value={dateRange}
-                onChange={(e) => handleDateRangeChange(e.target.value as DateRange)}
-                label="מציג נתונים של"
-              >
-                <MenuItem value="currentMonth">חודש נוכחי</MenuItem>
-                <MenuItem value="lastMonth">חודש קודם</MenuItem>
-                <MenuItem value="lastThreeMonths">שלושה חודשים</MenuItem>
-                <MenuItem value="lastSixMonths">חצי שנה</MenuItem>
-                <MenuItem value="custom">טווח מותאם</MenuItem>
-              </Select>
-            </FormControl>
-            <Typography variant="body2">
-              {formatDateRange(startDate, endDate)}
-            </Typography>
+            {renderDateFilter()}
+            {!isMobile && (
+              <Typography variant="body2">
+                {formatDateRange(startDate, endDate)}
+              </Typography>
+            )}
             <Tooltip title="רענן נתונים">
               <IconButton onClick={fetchData} disabled={loading}>
                 <RefreshIcon />
@@ -223,6 +421,10 @@ const Dashboard: React.FC = () => {
             </Tooltip>
           </Box>
         </Box>
+        <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)} centered sx={{ mb: 2 }}>
+          <Tab label="דשבורד מפורט" />
+          <Tab label="סיכום כללי" />
+        </Tabs>
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -233,100 +435,7 @@ const Dashboard: React.FC = () => {
           </Typography>
         </motion.div>
         {loading ? renderSkeletonLoader() : (
-          <Grid container spacing={isMobile ? 2 : 3}>
-            <AnimatePresence>
-              {filteredBudgetData.map((item, index) => (
-                <Grid item xs={12} sm={6} md={4} key={item.category}>
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                  >
-                    <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                      <Typography 
-                        variant="h6" 
-                        gutterBottom 
-                        sx={{ 
-                          display: 'flex', 
-                          alignItems: 'center',
-                          cursor: 'pointer',
-                          color: 'text.primary', // שימוש בצבע טקסט רגיל
-                          textDecoration: 'none', // הסרת קו תחתון
-                          '&:hover': {
-                            color: 'primary.main', // שינוי צבע בעת ריחוף
-                          },
-                        }}
-                        onClick={() => handleCategoryClick(item.category)}
-                      >
-                        <AccountBalanceWalletIcon sx={{ mr: 1 }} /> {item.category}
-                      </Typography>
-                      <Box sx={{ position: 'relative', height: 200, width: '100%' }}>
-                        <Doughnut
-                          data={{
-                            labels: ['הוצאות', 'נותר'],
-                            datasets: [{
-                              data: [item.spent, Math.max(0, item.budget - item.spent)],
-                              backgroundColor: ['#216869', '#9cc5a1'],
-                            }],
-                          }}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                              legend: {
-                                position: 'bottom',
-                                labels: {
-                                  color: '#1f2421',
-                                },
-                              },
-                              tooltip: {
-                                callbacks: {
-                                  label: function(context) {
-                                    let label = context.label || '';
-                                    if (label) {
-                                      label += ': ';
-                                    }
-                                    if (context.parsed !== undefined) {
-                                      label += new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(context.parsed);
-                                    }
-                                    return label;
-                                  }
-                                }
-                              }
-                            }
-                          }}
-                        />
-                      </Box>
-                      <Box sx={{ mt: 2, textAlign: 'center' }}>
-                        <Typography>
-                          תקציב: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(item.budget)}
-                        </Typography>
-                        <Typography>
-                          הוצאות: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(item.spent)}
-                        </Typography>
-                        {item.budget - item.spent >= 0 ? (
-                          <Tooltip title="כל שקל שנשאר הוא ניצחון קטן!">
-                            <Typography sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <EmojiEventsIcon sx={{ mr: 1, color: 'gold' }} />
-                              נותר: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(item.budget - item.spent)}
-                            </Typography>
-                          </Tooltip>
-                        ) : (
-                          <Tooltip title="זה הזמן לחשוב על דרכים לחסוך!">
-                            <Typography sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'error.main' }}>
-                              <WarningIcon sx={{ mr: 1 }} />
-                              חריגה: {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(Math.abs(item.budget - item.spent))}
-                            </Typography>
-                          </Tooltip>
-                        )}
-                      </Box>
-                    </Paper>
-                  </motion.div>
-                </Grid>
-              ))}
-            </AnimatePresence>
-          </Grid>
+          activeTab === 0 ? renderCurrentDashboard() : renderOverallPieChart()
         )}
       </motion.div>
       <Tooltip title="הוסף הוצאה חדשה" arrow>

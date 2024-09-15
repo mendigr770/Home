@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, Grid, Paper, Tooltip, useTheme, useMediaQuery, Fab, Skeleton, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Tabs, Tab, Menu } from '@mui/material';
+import { Box, Typography, Grid, Paper, Tooltip, useTheme, useMediaQuery, Fab, Skeleton, Select, MenuItem, FormControl, InputLabel, Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, Tabs, Tab, Menu, Popover } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Doughnut, Pie } from 'react-chartjs-2';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchBudgetData } from '../services/googleSheetsService';
+import { fetchBudgetData, addExpense, Expense } from '../services/googleSheetsService';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend, ChartData } from 'chart.js';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -18,6 +18,7 @@ import { startOfMonth, endOfMonth, subMonths, parseISO, isWithinInterval, format
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import DownloadIcon from '@mui/icons-material/Download';
+import ExpenseForm from './ExpenseForm';
 
 ChartJS.register(ArcElement, ChartTooltip, Legend);
 
@@ -59,6 +60,9 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  const [addExpenseAnchorEl, setAddExpenseAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
 
   const handleDateMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -412,6 +416,27 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleAddExpenseClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAddExpenseAnchorEl(event.currentTarget);
+  };
+
+  const handleAddExpenseClose = () => {
+    setAddExpenseAnchorEl(null);
+  };
+
+  const handleAddExpenseSave = async (expense: Omit<Expense, 'id'>) => {
+    setIsAddingExpense(true);
+    try {
+      await addExpense(expense.amount, expense.description, expense.category);
+      handleAddExpenseClose();
+      await fetchData(); // רענון הנתונים לאחר הוספת ההוצאה
+    } catch (error) {
+      console.error('Error adding expense:', error);
+    } finally {
+      setIsAddingExpense(false);
+    }
+  };
+
   return (
     <Box sx={{ 
       width: '100%',
@@ -466,8 +491,7 @@ const Dashboard: React.FC = () => {
         <Fab 
           color="primary" 
           aria-label="הוסף הוצאה חדשה" 
-          component={Link} 
-          to="/add-expense"
+          onClick={handleAddExpenseClick}
           sx={{
             position: 'fixed',
             bottom: 16,
@@ -478,6 +502,30 @@ const Dashboard: React.FC = () => {
           <AddIcon />
         </Fab>
       </Tooltip>
+
+      <Popover
+        open={Boolean(addExpenseAnchorEl)}
+        anchorEl={addExpenseAnchorEl}
+        onClose={handleAddExpenseClose}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+      >
+        <Box sx={{ p: 2, width: 300 }}>
+          <ExpenseForm
+            onSave={handleAddExpenseSave}
+            onCancel={handleAddExpenseClose}
+            isUpdating={isAddingExpense}
+            onDelete={() => {}} // לא רלוונטי להוספת הוצאה חדשה
+          />
+        </Box>
+      </Popover>
+
       <Dialog open={openDatePicker} onClose={() => setOpenDatePicker(false)}>
         <DialogTitle>בחר טווח תאריכים</DialogTitle>
         <DialogContent>

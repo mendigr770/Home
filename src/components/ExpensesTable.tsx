@@ -12,7 +12,7 @@ import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import SearchIcon from '@mui/icons-material/Search';
-import DownloadIcon from '@mui/icons-material/Download'; // הוספנו אייקון חדש
+import DownloadIcon from '@mui/icons-material/Download';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useFilter, DateRange } from '../contexts/FilterContext';
 import { startOfMonth, endOfMonth, subMonths, parseISO, format, isValid, parse } from 'date-fns';
@@ -351,25 +351,11 @@ const ExpensesTable: React.FC = () => {
   const handleAddExpenseSave = async (expense: Omit<Expense, 'id'>) => {
     setIsAddingExpense(true);
     try {
-      // יצירת מזהה זמני
-      const tempId = `temp_${Date.now()}`;
-      const newExpense = { ...expense, id: tempId };
-
-      // הוספה מקומית
-      setAllExpenses(prev => [...prev, newExpense]);
-      handleAddExpenseClose();
-
-      // סנכרון עם הגיליון
       const newId = await addExpense(expense.amount, expense.description, expense.category);
-      
-      // עדכון המזהה הקבוע
-      setAllExpenses(prev => prev.map(exp => 
-        exp.id === tempId ? { ...exp, id: newId } : exp
-      ));
+      handleAddExpenseClose();
+      await fetchData(); // רענון הנתונים לאחר הוספת ההוצאה
     } catch (error) {
       console.error('Error adding expense:', error);
-      // במקרה של שגיאה, נחזיר את המצב הקודם
-      await fetchData();
     } finally {
       setIsAddingExpense(false);
     }

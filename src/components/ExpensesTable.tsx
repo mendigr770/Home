@@ -378,7 +378,7 @@ const ExpensesTable: React.FC = () => {
   return (
     <Box sx={{ 
       width: '100%', 
-      padding: isMobile ? '12px' : 3,
+      padding: isMobile ? '8px' : 3,
       direction: 'rtl',
       position: 'relative',
       paddingBottom: '70px'
@@ -393,15 +393,31 @@ const ExpensesTable: React.FC = () => {
         width: '100%',
         marginLeft: 'auto',
         marginRight: 'auto',
-        boxShadow: isMobile ? '0px 2px 4px -1px rgba(0,0,0,0.2), 0px 4px 5px 0px rgba(0,0,0,0.14), 0px 1px 10px 0px rgba(0,0,0,0.12)' : 'none',
+        boxShadow: isMobile ? '0px 2px 4px -1px rgba(0,0,0,0.2)' : 'none',
       }}>
         <Table size={isMobile ? "small" : "medium"} sx={{ minWidth: isMobile ? 'auto' : 650 }}>
           <TableHead>
             <TableRow>
-              <TableCell align="right" sx={{ padding: isMobile ? '12px' : 2, fontWeight: 'bold' }}>תאריך</TableCell>
-              <TableCell align="right" sx={{ padding: isMobile ? '12px' : 2, fontWeight: 'bold' }}>תיאור</TableCell>
-              <TableCell align="right" sx={{ padding: isMobile ? '12px' : 2, fontWeight: 'bold' }}>סכום</TableCell>
-              <TableCell align="right" sx={{ padding: isMobile ? '12px' : 2, fontWeight: 'bold' }}>קטגוריה</TableCell>
+              <TableCell align="right" sx={{ 
+                padding: isMobile ? '6px 8px' : '16px', 
+                fontWeight: 'bold', 
+                fontSize: isMobile ? '0.75rem' : '0.875rem' 
+              }}>תאריך</TableCell>
+              <TableCell align="right" sx={{ 
+                padding: isMobile ? '6px 8px' : '16px', 
+                fontWeight: 'bold', 
+                fontSize: isMobile ? '0.75rem' : '0.875rem' 
+              }}>תיאור</TableCell>
+              <TableCell align="right" sx={{ 
+                padding: isMobile ? '6px 8px' : '16px', 
+                fontWeight: 'bold', 
+                fontSize: isMobile ? '0.75rem' : '0.875rem' 
+              }}>סכום</TableCell>
+              <TableCell align="right" sx={{ 
+                padding: isMobile ? '6px 8px' : '16px', 
+                fontWeight: 'bold', 
+                fontSize: isMobile ? '0.75rem' : '0.875rem' 
+              }}>קטגוריה</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -417,8 +433,9 @@ const ExpensesTable: React.FC = () => {
                       cursor: 'pointer', 
                       '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
                       '& > .MuiTableCell-root': { 
-                        padding: isMobile ? '12px' : 2,
-                        height: isMobile ? '48px' : 'auto'
+                        padding: isMobile ? '6px 8px' : '16px',
+                        fontSize: isMobile ? '0.75rem' : '0.875rem',
+                        height: isMobile ? '36px' : 'auto'
                       }
                     }}
                   >
@@ -428,16 +445,20 @@ const ExpensesTable: React.FC = () => {
                     <TableCell align="right">{expense.category}</TableCell>
                   </TableRow>
                 ))}
-                <TableRow key="total">
-                  <TableCell colSpan={2} align="right">
-                    <Typography variant="subtitle1" fontWeight="bold">
-                      סך הכל:
-                    </Typography>
+                <TableRow>
+                  <TableCell colSpan={2} align="right" sx={{ 
+                    fontWeight: 'bold', 
+                    fontSize: isMobile ? '0.75rem' : '0.875rem',
+                    padding: isMobile ? '6px 8px' : '16px'
+                  }}>
+                    סך הכל:
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="subtitle1" fontWeight="bold">
-                      {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(totalAmount)}
-                    </Typography>
+                  <TableCell align="right" sx={{ 
+                    fontWeight: 'bold', 
+                    fontSize: isMobile ? '0.75rem' : '0.875rem',
+                    padding: isMobile ? '6px 8px' : '16px'
+                  }}>
+                    {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' }).format(totalAmount)}
                   </TableCell>
                   <TableCell />
                 </TableRow>

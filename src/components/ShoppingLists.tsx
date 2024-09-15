@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, TextField, Button, List, ListItem, ListItemText, Select, MenuItem, FormControl, InputLabel, Paper, IconButton, Fab, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert } from '@mui/material';
+import { 
+  Box, Typography, TextField, Button, List, ListItem, ListItemText, 
+  Select, MenuItem, FormControl, InputLabel, Paper, IconButton, Fab, 
+  Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert,
+  Drawer, Divider, ListItemButton, Grid, Slide, Zoom, Skeleton
+} from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
@@ -288,6 +293,16 @@ const ShoppingLists: React.FC = () => {
     </Box>
   );
 
+  const renderSkeletonLoader = () => (
+    <Grid container spacing={2}>
+      {[1, 2, 3, 4, 5, 6].map((item) => (
+        <Grid item xs={12} sm={6} md={4} key={item}>
+          <Skeleton variant="rectangular" width="100%" height={100} sx={{ borderRadius: 1 }} />
+        </Grid>
+      ))}
+    </Grid>
+  );
+
   const renderAllLists = () => (
     <Grid container spacing={2}>
       {listsWithDates.map((list) => (
@@ -337,7 +352,9 @@ const ShoppingLists: React.FC = () => {
         </Box>
       </motion.div>
 
-      {selectedList ? (
+      {isLoading ? (
+        renderSkeletonLoader()
+      ) : selectedList ? (
         <Slide direction="up" in={true} mountOnEnter unmountOnExit>
           <Paper elevation={3} sx={{ p: 2, backgroundColor: theme.palette.background.paper }}>
             <Typography variant="h5" gutterBottom sx={{ color: theme.palette.primary.main }}>{selectedList}</Typography>

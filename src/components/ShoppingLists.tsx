@@ -4,8 +4,18 @@ import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
 import { fetchShoppingLists, fetchShoppingListItems, addShoppingListItem, updateShoppingListItem, ShoppingListItem, deleteShoppingListItem } from '../services/googleSheetsService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from '@mui/material/styles';
+
+interface ShoppingListWithDate {
+  name: string;
+  lastUpdated: Date;
+}
 
 const ShoppingLists: React.FC = () => {
   const [lists, setLists] = useState<string[]>([]);
@@ -21,6 +31,10 @@ const ShoppingLists: React.FC = () => {
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
   const [newItems, setNewItems] = useState<{ product: string; quantity: number }[]>([{ product: '', quantity: 1 }]);
   const [selectedItem, setSelectedItem] = useState<ShoppingListItem | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [listsWithDates, setListsWithDates] = useState<ShoppingListWithDate[]>([]);
+
+  const theme = useTheme();
 
   useEffect(() => {
     loadLists();
@@ -38,7 +52,21 @@ const ShoppingLists: React.FC = () => {
       console.log('Fetching shopping lists...');
       const fetchedLists = await fetchShoppingLists();
       console.log('Fetched lists:', fetchedLists);
-      setLists(fetchedLists);
+      
+      const listsWithDates: ShoppingListWithDate[] = await Promise.all(
+        fetchedLists.map(async (list) => {
+          const items = await fetchShoppingListItems(list);
+          const lastUpdated = items.reduce((latest, item) => {
+            const itemDate = new Date(item.date);
+            return itemDate > latest ? itemDate : latest;
+          }, new Date(0));
+          return { name: list, lastUpdated };
+        })
+      );
+
+      listsWithDates.sort((a, b) => b.lastUpdated.getTime() - a.lastUpdated.getTime());
+      setListsWithDates(listsWithDates);
+      setLists(listsWithDates.map(l => l.name));
     } catch (err) {
       console.error('Error loading shopping lists:', err);
       setError('Failed to load shopping lists');
@@ -194,98 +222,241 @@ const ShoppingLists: React.FC = () => {
   const purchasedItems = items.filter(item => item.status === 'נרכש');
 
   const renderStatusIcon = (status: 'ממתין' | 'נרכש') => {
-    return status === 'ממתין' ? <RadioButtonUncheckedIcon /> : <CheckCircleIcon />;
+    return status === 'ממתין' 
+      ? <RadioButtonUncheckedIcon sx={{ color: theme.palette.warning.main }} /> 
+      : <CheckCircleIcon sx={{ color: theme.palette.success.main }} />;
   };
+
+  const handleDrawerToggle = () => {
+    setDrawerOpen(!drawerOpen);
+  };
+
+  const handleListSelect = (list: string) => {
+    setSelectedList(list);
+    setDrawerOpen(false);
+  };
+
+  const drawer = (
+    <Box sx={{ width: 250, padding: 2, height: '100%', display: 'flex', flexDirection: 'column' }} role="presentation">
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6">רשימות קניות</Typography>
+        <IconButton onClick={handleDrawerToggle}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+      <Button 
+        variant="contained"
+        fullWidth
+        onClick={() => setOpenDialog(true)}
+        sx={{ mb: 2 }}
+      >
+        צור רשימה חדשה
+      </Button>
+      <Divider sx={{ mb: 2 }} />
+      <List sx={{ direction: 'rtl', flexGrow: 1, overflowY: 'auto' }}>
+        {listsWithDates.map((list, index) => (
+          <React.Fragment key={list.name}>
+            <ListItemButton 
+              onClick={() => handleListSelect(list.name)}
+              sx={{
+                borderRadius: 1,
+                mb: 1,
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                },
+              }}
+            >
+              <ListItemText 
+                primary={list.name} 
+                secondary={list.lastUpdated.toLocaleDateString('he-IL')}
+                sx={{
+                  '& .MuiListItemText-primary': {
+                    textAlign: 'right',
+                  },
+                  '& .MuiListItemText-secondary': {
+                    textAlign: 'right',
+                  },
+                }}
+              />
+            </ListItemButton>
+            {index < listsWithDates.length - 1 && (
+              <Divider variant="middle" sx={{ my: 1 }} />
+            )}
+          </React.Fragment>
+        ))}
+      </List>
+    </Box>
+  );
+
+  const renderAllLists = () => (
+    <Grid container spacing={2}>
+      {listsWithDates.map((list) => (
+        <Grid item xs={12} sm={6} md={4} key={list.name}>
+          <Paper 
+            elevation={3} 
+            sx={{ 
+              p: 2, 
+              cursor: 'pointer', 
+              '&:hover': { backgroundColor: theme.palette.action.hover },
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between'
+            }}
+            onClick={() => handleListSelect(list.name)}
+          >
+            <Typography variant="h6">{list.name}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              עודכן לאחרונה: {list.lastUpdated.toLocaleDateString('he-IL')}
+            </Typography>
+          </Paper>
+        </Grid>
+      ))}
+    </Grid>
+  );
 
   return (
     <Box sx={{ maxWidth: 800, margin: 'auto', mt: 4, p: 2, position: 'relative', minHeight: '80vh' }}>
-      <Typography variant="h4" gutterBottom align="center">רשימת קניות</Typography>
-      
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-        <IconButton onClick={handleRefresh} color="primary" disabled={isLoading}>
-          <RefreshIcon />
-        </IconButton>
-      </Box>
-
-      <Paper elevation={3} sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>בחר מרשימה קיימת</Typography>
-          <IconButton color="primary" onClick={() => setOpenDialog(true)}>
-            <PlaylistAddIcon />
-          </IconButton>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h4" sx={{ color: theme.palette.primary.main }}>
+            רשימת קניות
+          </Typography>
+          <Box>
+            <IconButton onClick={handleRefresh} color="primary" disabled={isLoading}>
+              <RefreshIcon />
+            </IconButton>
+            <IconButton onClick={handleDrawerToggle} edge="end">
+              <MenuIcon />
+            </IconButton>
+          </Box>
         </Box>
-        <FormControl fullWidth>
-          <InputLabel>רשימות קניות</InputLabel>
-          <Select
-            value={selectedList}
-            onChange={(e) => setSelectedList(e.target.value as string)}
-          >
-            {lists.map(list => (
-              <MenuItem key={list} value={list}>{list}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Paper>
+      </motion.div>
 
-      {selectedList && (
-        <Paper elevation={3} sx={{ p: 2 }}>
-          <Typography variant="h5" gutterBottom>{selectedList}</Typography>
+      {selectedList ? (
+        <Slide direction="up" in={true} mountOnEnter unmountOnExit>
+          <Paper elevation={3} sx={{ p: 2, backgroundColor: theme.palette.background.paper }}>
+            <Typography variant="h5" gutterBottom sx={{ color: theme.palette.primary.main }}>{selectedList}</Typography>
 
-          <Typography variant="h6">מוצרים לקניה</Typography>
-          <List>
-            {pendingItems.map((item) => (
-              <ListItem 
-                key={item.product} 
-                disablePadding 
-                onClick={() => handleItemClick(item)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <IconButton edge="start" onClick={(e) => { e.stopPropagation(); handleToggleItem(item.product, item.status); }}>
-                  {renderStatusIcon(item.status)}
-                </IconButton>
-                <ListItemText primary={`${item.product} (${item.quantity})`} />
-              </ListItem>
-            ))}
-          </List>
-
-          {purchasedItems.length > 0 && (
-            <>
-              <Typography variant="h6">מוצרים שנרכשו</Typography>
-              <List>
-                {purchasedItems.map((item) => (
-                  <ListItem 
-                    key={item.product} 
-                    disablePadding
-                    onClick={() => handleItemClick(item)}
-                    sx={{ cursor: 'pointer' }}
+            <Typography variant="h6" sx={{ color: theme.palette.text.secondary }}>מוצרים לקניה</Typography>
+            <List>
+              <AnimatePresence>
+                {pendingItems.map((item) => (
+                  <motion.div
+                    key={item.product}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3 }}
                   >
-                    <IconButton edge="start" onClick={(e) => { e.stopPropagation(); handleToggleItem(item.product, item.status); }}>
-                      {renderStatusIcon(item.status)}
-                    </IconButton>
-                    <ListItemText 
-                      primary={`${item.product} (${item.quantity})`} 
-                      sx={{ textDecoration: 'line-through' }} 
-                    />
-                  </ListItem>
+                    <ListItem 
+                      disablePadding 
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': { backgroundColor: theme.palette.action.hover },
+                        borderRadius: 1,
+                        mb: 1,
+                      }}
+                    >
+                      <IconButton edge="start" onClick={() => handleToggleItem(item.product, item.status)}>
+                        {renderStatusIcon(item.status)}
+                      </IconButton>
+                      <ListItemText 
+                        primary={`${item.product} (${item.quantity})`} 
+                        sx={{ color: theme.palette.text.primary }}
+                      />
+                      <IconButton onClick={() => handleItemClick(item)}>
+                        <EditIcon sx={{ color: theme.palette.primary.main }} />
+                      </IconButton>
+                      <IconButton onClick={() => handleDeleteItem(item.product)}>
+                        <DeleteIcon sx={{ color: theme.palette.error.main }} />
+                      </IconButton>
+                    </ListItem>
+                  </motion.div>
                 ))}
-              </List>
-            </>
-          )}
-        </Paper>
+              </AnimatePresence>
+            </List>
+
+            {purchasedItems.length > 0 && (
+              <>
+                <Typography variant="h6" sx={{ color: theme.palette.text.secondary, mt: 2 }}>מוצרים שנרכשו</Typography>
+                <List>
+                  <AnimatePresence>
+                    {purchasedItems.map((item) => (
+                      <motion.div
+                        key={item.product}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        <ListItem 
+                          disablePadding
+                          sx={{ 
+                            cursor: 'pointer',
+                            '&:hover': { backgroundColor: theme.palette.action.hover },
+                            borderRadius: 1,
+                            mb: 1,
+                          }}
+                        >
+                          <IconButton edge="start" onClick={() => handleToggleItem(item.product, item.status)}>
+                            {renderStatusIcon(item.status)}
+                          </IconButton>
+                          <ListItemText 
+                            primary={`${item.product} (${item.quantity})`} 
+                            sx={{ 
+                              textDecoration: 'line-through',
+                              color: theme.palette.text.secondary
+                            }} 
+                          />
+                          <IconButton onClick={() => handleItemClick(item)}>
+                            <EditIcon sx={{ color: theme.palette.primary.main }} />
+                          </IconButton>
+                          <IconButton onClick={() => handleDeleteItem(item.product)}>
+                            <DeleteIcon sx={{ color: theme.palette.error.main }} />
+                          </IconButton>
+                        </ListItem>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </List>
+              </>
+            )}
+          </Paper>
+        </Slide>
+      ) : (
+        renderAllLists()
       )}
 
-      <Fab 
-        color="primary" 
-        aria-label="add"
-        onClick={selectedList ? handleOpenAddItemDialog : () => setOpenDialog(true)}
-        sx={{
-          position: 'fixed',
-          bottom: 16,
-          left: 16,
+      <Zoom in={true} style={{ transitionDelay: '500ms' }}>
+        <Fab 
+          color="primary" 
+          aria-label="add"
+          onClick={selectedList ? handleOpenAddItemDialog : () => setOpenDialog(true)}
+          sx={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      </Zoom>
+
+      <Drawer
+        anchor="left"
+        open={drawerOpen}
+        onClose={handleDrawerToggle}
+        SlideProps={{
+          direction: 'right'
         }}
       >
-        <AddIcon />
-      </Fab>
+        {drawer}
+      </Drawer>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
         <DialogTitle>צור רשימת קניות חדשה</DialogTitle>
